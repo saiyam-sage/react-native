@@ -1,10 +1,9 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
+/**
+ * Copyright (c) 2014-present, Facebook, Inc.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * <p>This source code is licensed under the MIT license found in the LICENSE file in the root
+ * directory of this source tree.
  */
-
 package com.facebook.react.views.text;
 
 import static com.facebook.react.views.text.TextAttributeProps.UNSET;
@@ -19,7 +18,6 @@ import android.text.Spanned;
 import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.util.LruCache;
-import androidx.annotation.Nullable;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.uimanager.PixelUtil;
@@ -75,10 +73,10 @@ public class TextLayoutManager {
                   start, end, new ReactBackgroundColorSpan(textAttributes.mBackgroundColor)));
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-          if (!Float.isNaN(textAttributes.getLetterSpacing())) {
+          if (!Float.isNaN(textAttributes.mLetterSpacing)) {
             ops.add(
                 new SetSpanOperation(
-                    start, end, new CustomLetterSpacingSpan(textAttributes.getLetterSpacing())));
+                    start, end, new CustomLetterSpacingSpan(textAttributes.mLetterSpacing)));
           }
         }
         ops.add(
@@ -93,7 +91,6 @@ public class TextLayoutManager {
                   new CustomStyleSpan(
                       textAttributes.mFontStyle,
                       textAttributes.mFontWeight,
-                      textAttributes.mFontFeatureSettings,
                       textAttributes.mFontFamily,
                       context.getAssets())));
         }
@@ -126,11 +123,8 @@ public class TextLayoutManager {
     }
   }
 
-  // public because both ReactTextViewManager and ReactTextInputManager need to use this
-  public static Spannable getOrCreateSpannableForText(
-      Context context,
-      ReadableMap attributedString,
-      @Nullable ReactTextViewManagerCallback reactTextViewManagerCallback) {
+  protected static Spannable getOrCreateSpannableForText(
+      Context context, ReadableMap attributedString) {
 
     Spannable preparedSpannableText;
     String attributedStringPayload = attributedString.toString();
@@ -142,9 +136,7 @@ public class TextLayoutManager {
       }
     }
 
-    preparedSpannableText =
-        createSpannableFromAttributedString(
-            context, attributedString, reactTextViewManagerCallback);
+    preparedSpannableText = createSpannableFromAttributedString(context, attributedString);
     synchronized (sSpannableCacheLock) {
       sSpannableCache.put(attributedStringPayload, preparedSpannableText);
     }
@@ -152,9 +144,7 @@ public class TextLayoutManager {
   }
 
   private static Spannable createSpannableFromAttributedString(
-      Context context,
-      ReadableMap attributedString,
-      @Nullable ReactTextViewManagerCallback reactTextViewManagerCallback) {
+      Context context, ReadableMap attributedString) {
 
     SpannableStringBuilder sb = new SpannableStringBuilder();
 
@@ -175,9 +165,6 @@ public class TextLayoutManager {
       priority++;
     }
 
-    if (reactTextViewManagerCallback != null) {
-      reactTextViewManagerCallback.onPostProcessSpannable(sb);
-    }
     return sb;
   }
 
@@ -188,13 +175,11 @@ public class TextLayoutManager {
       float width,
       YogaMeasureMode widthYogaMeasureMode,
       float height,
-      YogaMeasureMode heightYogaMeasureMode,
-      ReactTextViewManagerCallback reactTextViewManagerCallback) {
+      YogaMeasureMode heightYogaMeasureMode) {
 
     // TODO(5578671): Handle text direction (see View#getTextDirectionHeuristic)
     TextPaint textPaint = sTextPaintInstance;
-    Spannable preparedSpannableText =
-        getOrCreateSpannableForText(context, attributedString, reactTextViewManagerCallback);
+    Spannable preparedSpannableText = getOrCreateSpannableForText(context, attributedString);
 
     // TODO add these props to paragraph attributes
     int textBreakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY;

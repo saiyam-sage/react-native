@@ -1,10 +1,9 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * <p>This source code is licensed under the MIT license found in the LICENSE file in the root
+ * directory of this source tree.
  */
-
 package com.facebook.react.views.image;
 
 import android.content.Context;
@@ -51,7 +50,7 @@ import com.facebook.react.common.build.ReactBuildConfig;
 import com.facebook.react.modules.fresco.ReactNetworkImageRequest;
 import com.facebook.react.uimanager.FloatUtil;
 import com.facebook.react.uimanager.PixelUtil;
-import com.facebook.react.uimanager.UIManagerHelper;
+import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.events.EventDispatcher;
 import com.facebook.react.views.imagehelper.ImageSource;
 import com.facebook.react.views.imagehelper.MultiSourceHelper;
@@ -229,7 +228,7 @@ public class ReactImageView extends GenericDraweeView {
       mControllerListener = null;
     } else {
       final EventDispatcher mEventDispatcher =
-          UIManagerHelper.getEventDispatcherForReactTag((ReactContext) getContext(), getId());
+          ((ReactContext) getContext()).getNativeModule(UIManagerModule.class).getEventDispatcher();
 
       mControllerListener =
           new BaseControllerListener<ImageInfo>() {

@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,17 +15,12 @@ namespace react {
 
 const char RootComponentName[] = "RootView";
 
-bool RootShadowNode::layoutIfNeeded(
+void RootShadowNode::layout(
     std::vector<LayoutableShadowNode const *> *affectedNodes) {
   SystraceSection s("RootShadowNode::layout");
-
-  if (getIsLayoutClean()) {
-    return false;
-  }
-
   ensureUnsealed();
 
-  auto layoutContext = getConcreteProps().layoutContext;
+  auto layoutContext = getProps()->layoutContext;
   layoutContext.affectedNodes = affectedNodes;
 
   layout(layoutContext);
@@ -36,37 +31,31 @@ bool RootShadowNode::layoutIfNeeded(
     setLayoutMetrics(layoutMetricsFromYogaNode(yogaNode_));
     setHasNewLayout(false);
   }
-
-  return true;
 }
 
-RootShadowNode::Unshared RootShadowNode::clone(
-    LayoutConstraints const &layoutConstraints,
-    LayoutContext const &layoutContext) const {
-  auto props = std::make_shared<RootProps const>(
-      getConcreteProps(), layoutConstraints, layoutContext);
+UnsharedRootShadowNode RootShadowNode::clone(
+    const LayoutConstraints &layoutConstraints,
+    const LayoutContext &layoutContext) const {
+  auto props = std::make_shared<const RootProps>(
+      *getProps(), layoutConstraints, layoutContext);
   auto newRootShadowNode = std::make_shared<RootShadowNode>(
       *this,
       ShadowNodeFragment{
+          /* .tag = */ ShadowNodeFragment::tagPlaceholder(),
+          /* .surfaceId = */ ShadowNodeFragment::surfaceIdPlaceholder(),
           /* .props = */ props,
       });
   return newRootShadowNode;
 }
 
-RootShadowNode::Unshared RootShadowNode::clone(
-    ShadowNodeFamily const &shadowNodeFamily,
-    std::function<ShadowNode::Unshared(ShadowNode const &oldShadowNode)>
-        callback) const {
-  auto ancestors = shadowNodeFamily.getAncestors(*this);
+UnsharedRootShadowNode RootShadowNode::clone(
+    SharedShadowNode const &oldShadowNode,
+    SharedShadowNode const &newShadowNode) const {
+  auto ancestors = oldShadowNode->getAncestors(*this);
 
   if (ancestors.size() == 0) {
-    return RootShadowNode::Unshared{nullptr};
+    return UnsharedRootShadowNode{nullptr};
   }
-
-  auto &parent = ancestors.back();
-  auto &oldShadowNode = parent.first.get().getChildren().at(parent.second);
-
-  auto newShadowNode = callback(*oldShadowNode);
 
   auto childNode = newShadowNode;
 
@@ -79,7 +68,10 @@ RootShadowNode::Unshared RootShadowNode::clone(
     children[childIndex] = childNode;
 
     childNode = parentNode.clone({
+        ShadowNodeFragment::tagPlaceholder(),
+        ShadowNodeFragment::surfaceIdPlaceholder(),
         ShadowNodeFragment::propsPlaceholder(),
+        ShadowNodeFragment::eventEmitterPlaceholder(),
         std::make_shared<SharedShadowNodeList>(children),
     });
   }

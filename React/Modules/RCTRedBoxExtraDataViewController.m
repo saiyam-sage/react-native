@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -106,7 +106,7 @@
         _tableView.rowHeight = UITableViewAutomaticDimension;
         _tableView.allowsSelection = NO;
 
-#if TARGET_OS_SIMULATOR || TARGET_OS_MACCATALYST
+#if TARGET_OS_SIMULATOR
         NSString *reloadText = @"Reload JS (\u2318R)";
         NSString *dismissText = @"Dismiss (ESC)";
 #else

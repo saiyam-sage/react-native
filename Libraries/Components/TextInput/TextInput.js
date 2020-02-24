@@ -7,10 +7,11 @@
  * @flow
  * @format
  */
-
 'use strict';
 
 const DeprecatedTextInputPropTypes = require('../../DeprecatedPropTypes/DeprecatedTextInputPropTypes');
+const DocumentSelectionState = require('../../vendor/document/selection/DocumentSelectionState');
+const NativeMethodsMixin = require('../../Renderer/shims/NativeMethodsMixin');
 const Platform = require('../../Utilities/Platform');
 const React = require('react');
 const ReactNative = require('../../Renderer/shims/ReactNative');
@@ -19,34 +20,38 @@ const Text = require('../../Text/Text');
 const TextAncestor = require('../../Text/TextAncestor');
 const TextInputState = require('./TextInputState');
 const TouchableWithoutFeedback = require('../Touchable/TouchableWithoutFeedback');
+const UIManager = require('../../ReactNative/UIManager');
 
+const createReactClass = require('create-react-class');
 const invariant = require('invariant');
-const nullthrows = require('nullthrows');
-const setAndForwardRef = require('../../Utilities/setAndForwardRef');
+const requireNativeComponent = require('../../ReactNative/requireNativeComponent');
+const warning = require('fbjs/lib/warning');
 
 import type {TextStyleProp, ViewStyleProp} from '../../StyleSheet/StyleSheet';
 import type {ColorValue} from '../../StyleSheet/StyleSheetTypes';
 import type {ViewProps} from '../View/ViewPropTypes';
 import type {SyntheticEvent, ScrollEvent} from '../../Types/CoreEventTypes';
 import type {PressEvent} from '../../Types/CoreEventTypes';
-import type {HostComponent} from '../../Renderer/shims/ReactNativeTypes';
-
-const {useEffect, useRef, useState} = React;
-
-type ReactRefSetter<T> = {current: null | T, ...} | ((ref: null | T) => mixed);
 
 let AndroidTextInput;
 let RCTMultilineTextInputView;
 let RCTSinglelineTextInputView;
 
 if (Platform.OS === 'android') {
-  AndroidTextInput = require('./AndroidTextInputNativeComponent').default;
+  AndroidTextInput = requireNativeComponent('AndroidTextInput');
 } else if (Platform.OS === 'ios') {
-  RCTMultilineTextInputView = require('./RCTMultilineTextInputNativeComponent.js')
-    .default;
-  RCTSinglelineTextInputView = require('./RCTSingelineTextInputNativeComponent.js')
-    .default;
+  RCTMultilineTextInputView = requireNativeComponent(
+    'RCTMultilineTextInputView',
+  );
+  RCTSinglelineTextInputView = requireNativeComponent(
+    'RCTSinglelineTextInputView',
+  );
 }
+
+const onlyMultiline = {
+  onTextInput: true,
+  children: true,
+};
 
 export type ChangeEvent = SyntheticEvent<
   $ReadOnly<{|
@@ -139,8 +144,6 @@ export type KeyboardType =
   | 'name-phone-pad'
   | 'twitter'
   | 'web-search'
-  // iOS 10+ only
-  | 'ascii-capable-number-pad'
   // Android-only
   | 'visible-password';
 
@@ -218,6 +221,23 @@ type IOSProps = $ReadOnly<{|
   enablesReturnKeyAutomatically?: ?boolean,
 
   /**
+   * An instance of `DocumentSelectionState`, this is some state that is responsible for
+   * maintaining selection information for a document.
+   *
+   * Some functionality that can be performed with this instance is:
+   *
+   * - `blur()`
+   * - `focus()`
+   * - `update()`
+   *
+   * > You can reference `DocumentSelectionState` in
+   * > [`vendor/document/selection/DocumentSelectionState.js`](https://github.com/facebook/react-native/blob/master/Libraries/vendor/document/selection/DocumentSelectionState.js)
+   *
+   * @platform ios
+   */
+  selectionState?: ?DocumentSelectionState,
+
+  /**
    * When the clear button should appear on the right side of the text view.
    * This property is supported only for single-line TextInput component.
    * @platform ios
@@ -267,22 +287,7 @@ type IOSProps = $ReadOnly<{|
    */
   textContentType?: ?TextContentType,
 
-  /**
-   * Provide rules for your password.
-   * For example, say you want to require a password with at least eight characters consisting of a mix of uppercase and lowercase letters, at least one number, and at most two consecutive characters.
-   * "required: upper; required: lower; required: digit; max-consecutive: 2; minlength: 8;"
-   * @platform ios
-   */
-  passwordRules?: ?PasswordRules,
-
-  /*
-   * If `true`, allows TextInput to pass touch events to the parent component.
-   * This allows components to be swipeable from the TextInput on iOS,
-   * as is the case on Android by default.
-   * If `false`, TextInput always asks to handle the input (except when disabled).
-   * @platform ios
-   */
-  rejectResponderTermination?: ?boolean,
+  PasswordRules?: ?PasswordRules,
 
   /**
    * If `false`, scrolling of the text view will be disabled.
@@ -404,7 +409,7 @@ type AndroidProps = $ReadOnly<{|
   showSoftInputOnFocus?: ?boolean,
 |}>;
 
-export type Props = $ReadOnly<{|
+type Props = $ReadOnly<{|
   ...$Diff<ViewProps, $ReadOnly<{|style: ?ViewStyleProp|}>>,
   ...IOSProps,
   ...AndroidProps,
@@ -557,6 +562,8 @@ export type Props = $ReadOnly<{|
    */
   onContentSizeChange?: ?(e: ContentSizeChangeEvent) => mixed,
 
+  onTextInput?: ?(e: TextInputEvent) => mixed,
+
   /**
    * Callback that is called when text input ends.
    */
@@ -682,56 +689,10 @@ export type Props = $ReadOnly<{|
    * If `true`, contextMenuHidden is hidden. The default value is `false`.
    */
   contextMenuHidden?: ?boolean,
-
-  forwardedRef?: ?ReactRefSetter<
-    React.ElementRef<HostComponent<mixed>> & ImperativeMethods,
-  >,
-|}>;
-
-type ImperativeMethods = $ReadOnly<{|
-  clear: () => void,
-  isFocused: () => boolean,
-  getNativeRef: () => ?React.ElementRef<HostComponent<mixed>>,
 |}>;
 
 const emptyFunctionThatReturnsTrue = () => true;
 
-function useFocusOnMount(
-  initialAutoFocus: ?boolean,
-  inputRef: {|
-    current: null | React.ElementRef<HostComponent<mixed>>,
-  |},
-) {
-  const initialAutoFocusValue = useRef<?boolean>(initialAutoFocus);
-
-  useEffect(() => {
-    // We only want to autofocus on initial mount.
-    // Since initialAutoFocusValue and inputRef will never change
-    // this should match the expected behavior
-    if (initialAutoFocusValue.current) {
-      const focus = () => {
-        if (inputRef.current != null) {
-          inputRef.current.focus();
-        }
-      };
-
-      let rafId;
-      if (Platform.OS === 'android') {
-        // On Android this needs to be executed in a rAF callback
-        // otherwise the keyboard opens then closes immediately.
-        rafId = requestAnimationFrame(focus);
-      } else {
-        focus();
-      }
-
-      return () => {
-        if (rafId != null) {
-          cancelAnimationFrame(rafId);
-        }
-      };
-    }
-  }, [initialAutoFocusValue, inputRef]);
-}
 /**
  * A foundational component for inputting text into the app via a
  * keyboard. Props provide configurability for several features, such as
@@ -843,320 +804,434 @@ function useFocusOnMount(
  * or control this param programmatically with native code.
  *
  */
-function InternalTextInput(props: Props): React.Node {
-  const inputRef = useRef<null | React.ElementRef<HostComponent<mixed>>>(null);
 
-  const selection: ?Selection =
-    props.selection == null
-      ? null
-      : {
-          start: props.selection.start,
-          end: props.selection.end ?? props.selection.start,
-        };
+const TextInput = createReactClass({
+  displayName: 'TextInput',
+  statics: {
+    State: {
+      currentlyFocusedField: TextInputState.currentlyFocusedField,
+      focusTextInput: TextInputState.focusTextInput,
+      blurTextInput: TextInputState.blurTextInput,
+    },
+  },
+  propTypes: DeprecatedTextInputPropTypes,
+  getDefaultProps() {
+    return {
+      allowFontScaling: true,
+      rejectResponderTermination: true,
+      underlineColorAndroid: 'transparent',
+    };
+  },
+  /**
+   * `NativeMethodsMixin` will look for this when invoking `setNativeProps`. We
+   * make `this` look like an actual native component class.
+   */
+  mixins: [NativeMethodsMixin],
 
-  const [lastNativeText, setLastNativeText] = useState<?Stringish>(props.value);
-  const [lastNativeSelection, setLastNativeSelection] = useState<?Selection>(
-    selection,
-  );
+  /**
+   * Returns `true` if the input is currently focused; `false` otherwise.
+   */
+  isFocused: function(): boolean {
+    return (
+      TextInputState.currentlyFocusedField() ===
+      ReactNative.findNodeHandle(this._inputRef)
+    );
+  },
 
-  // This is necessary in case native updates the text and JS decides
-  // that the update should be ignored and we should stick with the value
-  // that we have in JS.
-  useEffect(() => {
-    const nativeUpdate = {};
+  _inputRef: (undefined: any),
+  _focusSubscription: (undefined: ?Function),
+  _lastNativeText: (undefined: ?string),
+  _lastNativeSelection: (undefined: ?Selection),
+  _rafId: (null: ?AnimationFrameID),
 
-    if (lastNativeText !== props.value && typeof props.value === 'string') {
-      nativeUpdate.text = props.value;
-      setLastNativeText(props.value);
+  componentDidMount: function() {
+    this._lastNativeText = this.props.value;
+    const tag = ReactNative.findNodeHandle(this._inputRef);
+    if (tag != null) {
+      // tag is null only in unit tests
+      TextInputState.registerInput(tag);
     }
 
-    if (
-      selection &&
-      lastNativeSelection &&
-      (lastNativeSelection.start !== selection.start ||
-        lastNativeSelection.end !== selection.end)
-    ) {
-      nativeUpdate.selection = selection;
-      setLastNativeSelection(selection);
+    if (this.props.autoFocus) {
+      this._rafId = requestAnimationFrame(this.focus);
     }
+  },
 
-    if (Object.keys(nativeUpdate).length > 0 && inputRef.current) {
-      inputRef.current.setNativeProps(nativeUpdate);
+  componentWillUnmount: function() {
+    this._focusSubscription && this._focusSubscription.remove();
+    if (this.isFocused()) {
+      this.blur();
     }
-  }, [inputRef, props.value, lastNativeText, selection, lastNativeSelection]);
+    const tag = ReactNative.findNodeHandle(this._inputRef);
+    if (tag != null) {
+      TextInputState.unregisterInput(tag);
+    }
+    if (this._rafId != null) {
+      cancelAnimationFrame(this._rafId);
+    }
+  },
 
-  useFocusOnMount(props.autoFocus, inputRef);
+  /**
+   * Removes all text from the `TextInput`.
+   */
+  clear: function() {
+    this.setNativeProps({text: ''});
+  },
 
-  useEffect(() => {
-    const inputRefValue = inputRef.current;
+  render: function() {
+    let textInput;
+    if (Platform.OS === 'ios') {
+      textInput = UIManager.getViewManagerConfig('RCTVirtualText')
+        ? this._renderIOS()
+        : this._renderIOSLegacy();
+    } else if (Platform.OS === 'android') {
+      textInput = this._renderAndroid();
+    }
+    return (
+      <TextAncestor.Provider value={true}>{textInput}</TextAncestor.Provider>
+    );
+  },
 
-    if (inputRefValue != null) {
-      TextInputState.registerInput(inputRefValue);
+  _getText: function(): ?string {
+    return typeof this.props.value === 'string'
+      ? this.props.value
+      : typeof this.props.defaultValue === 'string'
+      ? this.props.defaultValue
+      : '';
+  },
 
-      return () => {
-        TextInputState.unregisterInput(inputRefValue);
+  _setNativeRef: function(ref: any) {
+    this._inputRef = ref;
+  },
+
+  _renderIOSLegacy: function() {
+    let textContainer;
+
+    const props = Object.assign({}, this.props);
+    props.style = [this.props.style];
+
+    if (props.selection && props.selection.end == null) {
+      props.selection = {
+        start: props.selection.start,
+        end: props.selection.start,
       };
     }
-  }, [inputRef]);
 
-  useEffect(() => {
-    // When unmounting we need to blur the input
-    return () => {
-      if (isFocused()) {
-        nullthrows(inputRef.current).blur();
+    if (!props.multiline) {
+      if (__DEV__) {
+        for (const propKey in onlyMultiline) {
+          if (props[propKey]) {
+            const error = new Error(
+              'TextInput prop `' +
+                propKey +
+                '` is only supported with multiline.',
+            );
+            warning(false, '%s', error.stack);
+          }
+        }
       }
-    };
-  }, [inputRef]);
-
-  function clear(): void {
-    if (inputRef.current != null) {
-      inputRef.current.setNativeProps({text: ''});
-    }
-  }
-
-  // TODO: Fix this returning true on null === null, when no input is focused
-  function isFocused(): boolean {
-    return TextInputState.currentlyFocusedInput() === inputRef.current;
-  }
-
-  function getNativeRef(): ?React.ElementRef<HostComponent<mixed>> {
-    return inputRef.current;
-  }
-
-  function _getText(): ?string {
-    return typeof props.value === 'string'
-      ? props.value
-      : typeof props.defaultValue === 'string'
-      ? props.defaultValue
-      : '';
-  }
-
-  const _setNativeRef = setAndForwardRef({
-    getForwardedRef: () => props.forwardedRef,
-    setLocalRef: ref => {
-      inputRef.current = ref;
-
-      /*
-        Hi reader from the future. I'm sorry for this.
-
-        This is a hack. Ideally we would forwardRef to the underlying
-        host component. However, since TextInput has it's own methods that can be
-        called as well, if we used the standard forwardRef then these
-        methods wouldn't be accessible and thus be a breaking change.
-
-        We have a couple of options of how to handle this:
-        - Return a new ref with everything we methods from both. This is problematic
-          because we need React to also know it is a host component which requires
-          internals of the class implementation of the ref.
-        - Break the API and have some other way to call one set of the methods or
-          the other. This is our long term approach as we want to eventually
-          get the methods on host components off the ref. So instead of calling
-          ref.measure() you might call ReactNative.measure(ref). This would hopefully
-          let the ref for TextInput then have the methods like `.clear`. Or we do it
-          the other way and make it TextInput.clear(textInputRef) which would be fine
-          too. Either way though is a breaking change that is longer term.
-        - Mutate this ref. :( Gross, but accomplishes what we need in the meantime
-          before we can get to the long term breaking change.
-        */
-      if (ref) {
-        ref.clear = clear;
-        ref.isFocused = isFocused;
-        ref.getNativeRef = getNativeRef;
+      textContainer = (
+        <RCTSinglelineTextInputView
+          ref={this._setNativeRef}
+          {...props}
+          onFocus={this._onFocus}
+          onBlur={this._onBlur}
+          onChange={this._onChange}
+          onSelectionChange={this._onSelectionChange}
+          onSelectionChangeShouldSetResponder={emptyFunctionThatReturnsTrue}
+          text={this._getText()}
+        />
+      );
+    } else {
+      let children = props.children;
+      let childCount = 0;
+      React.Children.forEach(children, () => ++childCount);
+      invariant(
+        !(props.value && childCount),
+        'Cannot specify both value and children.',
+      );
+      if (childCount >= 1) {
+        children = (
+          <Text
+            style={props.style}
+            allowFontScaling={props.allowFontScaling}
+            maxFontSizeMultiplier={props.maxFontSizeMultiplier}>
+            {children}
+          </Text>
+        );
       }
-    },
-  });
-
-  const _onPress = (event: PressEvent) => {
-    if (props.editable || props.editable === undefined) {
-      nullthrows(inputRef.current).focus();
-    }
-  };
-
-  const _onChange = (event: ChangeEvent) => {
-    // Make sure to fire the mostRecentEventCount first so it is already set on
-    // native when the text value is set.
-    if (inputRef.current) {
-      inputRef.current.setNativeProps({
-        mostRecentEventCount: event.nativeEvent.eventCount,
-      });
-    }
-
-    const text = event.nativeEvent.text;
-    props.onChange && props.onChange(event);
-    props.onChangeText && props.onChangeText(text);
-
-    if (!inputRef.current) {
-      // calling `props.onChange` or `props.onChangeText`
-      // may clean up the input itself. Exits here.
-      return;
+      if (props.inputView) {
+        children = [children, props.inputView];
+      }
+      props.style.unshift(styles.multilineInput);
+      textContainer = (
+        <RCTMultilineTextInputView
+          ref={this._setNativeRef}
+          {...props}
+          children={children}
+          onFocus={this._onFocus}
+          onBlur={this._onBlur}
+          onChange={this._onChange}
+          onContentSizeChange={this.props.onContentSizeChange}
+          onSelectionChange={this._onSelectionChange}
+          onTextInput={this._onTextInput}
+          onSelectionChangeShouldSetResponder={emptyFunctionThatReturnsTrue}
+          text={this._getText()}
+          dataDetectorTypes={this.props.dataDetectorTypes}
+          onScroll={this._onScroll}
+        />
+      );
     }
 
-    setLastNativeText(text);
-  };
+    return (
+      <TouchableWithoutFeedback
+        onLayout={props.onLayout}
+        onPress={this._onPress}
+        rejectResponderTermination={true}
+        accessible={props.accessible}
+        accessibilityLabel={props.accessibilityLabel}
+        accessibilityRole={props.accessibilityRole}
+        accessibilityStates={props.accessibilityStates}
+        accessibilityState={props.accessibilityState}
+        nativeID={this.props.nativeID}
+        testID={props.testID}>
+        {textContainer}
+      </TouchableWithoutFeedback>
+    );
+  },
 
-  const _onSelectionChange = (event: SelectionChangeEvent) => {
-    props.onSelectionChange && props.onSelectionChange(event);
+  _renderIOS: function() {
+    const props = Object.assign({}, this.props);
+    props.style = [this.props.style];
 
-    if (!inputRef.current) {
-      // calling `props.onSelectionChange`
-      // may clean up the input itself. Exits here.
-      return;
+    if (props.selection && props.selection.end == null) {
+      props.selection = {
+        start: props.selection.start,
+        end: props.selection.start,
+      };
     }
 
-    setLastNativeSelection(event.nativeEvent.selection);
-  };
-
-  const _onFocus = (event: FocusEvent) => {
-    TextInputState.focusInput(inputRef.current);
-    if (props.onFocus) {
-      props.onFocus(event);
-    }
-  };
-
-  const _onBlur = (event: BlurEvent) => {
-    TextInputState.blurInput(inputRef.current);
-    if (props.onBlur) {
-      props.onBlur(event);
-    }
-  };
-
-  const _onScroll = (event: ScrollEvent) => {
-    props.onScroll && props.onScroll(event);
-  };
-
-  let textInput = null;
-  let additionalTouchableProps: {|
-    rejectResponderTermination?: $PropertyType<
-      Props,
-      'rejectResponderTermination',
-    >,
-    // This is a hack to let Flow know we want an exact object
-  |} = {...null};
-
-  if (Platform.OS === 'ios') {
     const RCTTextInputView = props.multiline
       ? RCTMultilineTextInputView
       : RCTSinglelineTextInputView;
 
-    const style = props.multiline
-      ? [styles.multilineInput, props.style]
-      : props.style;
+    if (props.multiline) {
+      props.style.unshift(styles.multilineInput);
+    }
 
-    additionalTouchableProps.rejectResponderTermination =
-      props.rejectResponderTermination;
-
-    textInput = (
+    const textContainer = (
       <RCTTextInputView
-        ref={_setNativeRef}
+        ref={this._setNativeRef}
         {...props}
-        dataDetectorTypes={props.dataDetectorTypes}
-        onBlur={_onBlur}
-        onChange={_onChange}
-        onContentSizeChange={props.onContentSizeChange}
-        onFocus={_onFocus}
-        onScroll={_onScroll}
-        onSelectionChange={_onSelectionChange}
+        onFocus={this._onFocus}
+        onBlur={this._onBlur}
+        onChange={this._onChange}
+        onContentSizeChange={this.props.onContentSizeChange}
+        onSelectionChange={this._onSelectionChange}
+        onTextInput={this._onTextInput}
         onSelectionChangeShouldSetResponder={emptyFunctionThatReturnsTrue}
-        selection={selection}
-        style={style}
-        text={_getText()}
+        text={this._getText()}
+        dataDetectorTypes={this.props.dataDetectorTypes}
+        onScroll={this._onScroll}
       />
     );
-  } else if (Platform.OS === 'android') {
-    const style = [props.style];
-    const autoCapitalize = props.autoCapitalize || 'sentences';
-    let children = props.children;
+
+    return (
+      <TouchableWithoutFeedback
+        onLayout={props.onLayout}
+        onPress={this._onPress}
+        rejectResponderTermination={props.rejectResponderTermination}
+        accessible={props.accessible}
+        accessibilityLabel={props.accessibilityLabel}
+        accessibilityRole={props.accessibilityRole}
+        accessibilityStates={props.accessibilityStates}
+        accessibilityState={props.accessibilityState}
+        nativeID={this.props.nativeID}
+        testID={props.testID}>
+        {textContainer}
+      </TouchableWithoutFeedback>
+    );
+  },
+
+  _renderAndroid: function() {
+    const props = Object.assign({}, this.props);
+    props.style = [this.props.style];
+    props.autoCapitalize = props.autoCapitalize || 'sentences';
+    let children = this.props.children;
     let childCount = 0;
     React.Children.forEach(children, () => ++childCount);
     invariant(
-      !(props.value && childCount),
+      !(this.props.value && childCount),
       'Cannot specify both value and children.',
     );
     if (childCount > 1) {
       children = <Text>{children}</Text>;
     }
 
-    textInput = (
-      /* $FlowFixMe the types for AndroidTextInput don't match up exactly with
-        the props for TextInput. This will need to get fixed */
+    if (props.selection && props.selection.end == null) {
+      props.selection = {
+        start: props.selection.start,
+        end: props.selection.start,
+      };
+    }
+
+    const textContainer = (
       <AndroidTextInput
-        ref={_setNativeRef}
+        ref={this._setNativeRef}
         {...props}
-        autoCapitalize={autoCapitalize}
-        children={children}
-        disableFullscreenUI={props.disableFullscreenUI}
         mostRecentEventCount={0}
-        onBlur={_onBlur}
-        onChange={_onChange}
-        onFocus={_onFocus}
-        onScroll={_onScroll}
-        onSelectionChange={_onSelectionChange}
-        selection={selection}
-        style={style}
-        text={_getText()}
-        textBreakStrategy={props.textBreakStrategy}
+        onFocus={this._onFocus}
+        onBlur={this._onBlur}
+        onChange={this._onChange}
+        onSelectionChange={this._onSelectionChange}
+        onTextInput={this._onTextInput}
+        text={this._getText()}
+        children={children}
+        disableFullscreenUI={this.props.disableFullscreenUI}
+        textBreakStrategy={this.props.textBreakStrategy}
+        onScroll={this._onScroll}
       />
     );
-  }
-  return (
-    <TextAncestor.Provider value={true}>
+
+    return (
       <TouchableWithoutFeedback
         onLayout={props.onLayout}
-        onPress={_onPress}
-        accessible={props.accessible}
-        accessibilityLabel={props.accessibilityLabel}
-        accessibilityRole={props.accessibilityRole}
-        accessibilityState={props.accessibilityState}
-        nativeID={props.nativeID}
-        testID={props.testID}
-        {...additionalTouchableProps}>
-        {textInput}
+        onPress={this._onPress}
+        accessible={this.props.accessible}
+        accessibilityLabel={this.props.accessibilityLabel}
+        accessibilityRole={this.props.accessibilityRole}
+        accessibilityStates={this.props.accessibilityStates}
+        accessibilityState={this.props.accessibilityState}
+        nativeID={this.props.nativeID}
+        testID={this.props.testID}>
+        {textContainer}
       </TouchableWithoutFeedback>
-    </TextAncestor.Provider>
-  );
-}
+    );
+  },
 
-const ExportedForwardRef: React.AbstractComponent<
-  React.ElementConfig<typeof InternalTextInput>,
-  React.ElementRef<HostComponent<mixed>> & ImperativeMethods,
-> = React.forwardRef(function TextInput(
-  props,
-  forwardedRef: ReactRefSetter<
-    React.ElementRef<HostComponent<mixed>> & ImperativeMethods,
-  >,
-) {
-  return <InternalTextInput {...props} forwardedRef={forwardedRef} />;
+  _onFocus: function(event: FocusEvent) {
+    if (this.props.onFocus) {
+      this.props.onFocus(event);
+    }
+
+    if (this.props.selectionState) {
+      this.props.selectionState.focus();
+    }
+  },
+
+  _onPress: function(event: PressEvent) {
+    if (this.props.editable || this.props.editable === undefined) {
+      this.focus();
+    }
+  },
+
+  _onChange: function(event: ChangeEvent) {
+    // Make sure to fire the mostRecentEventCount first so it is already set on
+    // native when the text value is set.
+    if (this._inputRef && this._inputRef.setNativeProps) {
+      ReactNative.setNativeProps(this._inputRef, {
+        mostRecentEventCount: event.nativeEvent.eventCount,
+      });
+    }
+
+    const text = event.nativeEvent.text;
+    this.props.onChange && this.props.onChange(event);
+    this.props.onChangeText && this.props.onChangeText(text);
+
+    if (!this._inputRef) {
+      // calling `this.props.onChange` or `this.props.onChangeText`
+      // may clean up the input itself. Exits here.
+      return;
+    }
+
+    this._lastNativeText = text;
+    this.forceUpdate();
+  },
+
+  _onSelectionChange: function(event: SelectionChangeEvent) {
+    this.props.onSelectionChange && this.props.onSelectionChange(event);
+
+    if (!this._inputRef) {
+      // calling `this.props.onSelectionChange`
+      // may clean up the input itself. Exits here.
+      return;
+    }
+
+    this._lastNativeSelection = event.nativeEvent.selection;
+
+    if (this.props.selection || this.props.selectionState) {
+      this.forceUpdate();
+    }
+  },
+
+  componentDidUpdate: function() {
+    // This is necessary in case native updates the text and JS decides
+    // that the update should be ignored and we should stick with the value
+    // that we have in JS.
+    const nativeProps = {};
+
+    if (
+      this._lastNativeText !== this.props.value &&
+      typeof this.props.value === 'string'
+    ) {
+      nativeProps.text = this.props.value;
+    }
+
+    // Selection is also a controlled prop, if the native value doesn't match
+    // JS, update to the JS value.
+    const {selection} = this.props;
+    if (
+      this._lastNativeSelection &&
+      selection &&
+      (this._lastNativeSelection.start !== selection.start ||
+        this._lastNativeSelection.end !== selection.end)
+    ) {
+      nativeProps.selection = this.props.selection;
+    }
+
+    if (
+      Object.keys(nativeProps).length > 0 &&
+      this._inputRef &&
+      this._inputRef.setNativeProps
+    ) {
+      ReactNative.setNativeProps(this._inputRef, nativeProps);
+    }
+
+    if (this.props.selectionState && selection) {
+      this.props.selectionState.update(selection.start, selection.end);
+    }
+  },
+
+  _onBlur: function(event: BlurEvent) {
+    // This is a hack to fix https://fburl.com/toehyir8
+    // @todo(rsnara) Figure out why this is necessary.
+    this.blur();
+    if (this.props.onBlur) {
+      this.props.onBlur(event);
+    }
+
+    if (this.props.selectionState) {
+      this.props.selectionState.blur();
+    }
+  },
+
+  _onTextInput: function(event: TextInputEvent) {
+    this.props.onTextInput && this.props.onTextInput(event);
+  },
+
+  _onScroll: function(event: ScrollEvent) {
+    this.props.onScroll && this.props.onScroll(event);
+  },
 });
 
-// $FlowFixMe
-ExportedForwardRef.defaultProps = {
-  allowFontScaling: true,
-  rejectResponderTermination: true,
-  underlineColorAndroid: 'transparent',
-};
+class InternalTextInputType extends ReactNative.NativeComponent<Props> {
+  clear() {}
 
-// TODO: Deprecate this
-// $FlowFixMe
-ExportedForwardRef.propTypes = DeprecatedTextInputPropTypes;
+  // $FlowFixMe
+  isFocused(): boolean {}
+}
 
-// $FlowFixMe
-ExportedForwardRef.State = {
-  currentlyFocusedInput: TextInputState.currentlyFocusedInput,
-
-  currentlyFocusedField: TextInputState.currentlyFocusedField,
-  focusTextInput: TextInputState.focusTextInput,
-  blurTextInput: TextInputState.blurTextInput,
-};
-
-type TextInputComponentStatics = $ReadOnly<{|
-  State: $ReadOnly<{|
-    currentlyFocusedInput: typeof TextInputState.currentlyFocusedInput,
-    currentlyFocusedField: typeof TextInputState.currentlyFocusedField,
-    focusTextInput: typeof TextInputState.focusTextInput,
-    blurTextInput: typeof TextInputState.blurTextInput,
-  |}>,
-  propTypes: typeof DeprecatedTextInputPropTypes,
-|}>;
+const TypedTextInput = ((TextInput: any): Class<InternalTextInputType>);
 
 const styles = StyleSheet.create({
   multilineInput: {
@@ -1167,11 +1242,4 @@ const styles = StyleSheet.create({
   },
 });
 
-module.exports = ((ExportedForwardRef: any): React.AbstractComponent<
-  React.ElementConfig<typeof InternalTextInput>,
-  $ReadOnly<{|
-    ...React.ElementRef<HostComponent<mixed>>,
-    ...ImperativeMethods,
-  |}>,
-> &
-  TextInputComponentStatics);
+module.exports = TypedTextInput;

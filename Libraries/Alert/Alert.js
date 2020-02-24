@@ -26,13 +26,11 @@ export type Buttons = Array<{
   text?: string,
   onPress?: ?Function,
   style?: AlertButtonStyle,
-  ...
 }>;
 
 type Options = {
   cancelable?: ?boolean,
   onDismiss?: ?() => void,
-  ...
 };
 
 /**
@@ -111,6 +109,28 @@ class Alert {
     keyboardType?: string,
   ): void {
     if (Platform.OS === 'ios') {
+      if (typeof type === 'function') {
+        console.warn(
+          'You passed a callback function as the "type" argument to Alert.prompt(). React Native is ' +
+            'assuming  you want to use the deprecated Alert.prompt(title, defaultValue, buttons, callback) ' +
+            'signature. The current signature is Alert.prompt(title, message, callbackOrButtons, type, defaultValue, ' +
+            'keyboardType) and the old syntax will be removed in a future version.',
+        );
+
+        const callback = type;
+        RCTAlertManager.alertWithArgs(
+          {
+            title: title || '',
+            type: 'plain-text',
+            defaultValue: message || '',
+          },
+          (id, value) => {
+            callback(value);
+          },
+        );
+        return;
+      }
+
       let callbacks = [];
       const buttons = [];
       let cancelButtonKey;

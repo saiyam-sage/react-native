@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -54,12 +54,10 @@ class ConcreteViewShadowNode : public ConcreteShadowNode<
   using ConcreteViewProps = ViewPropsT;
 
   ConcreteViewShadowNode(
-      ShadowNodeFragment const &fragment,
-      ShadowNodeFamily::Shared const &family,
-      ShadowNodeTraits traits)
-      : BaseShadowNode(fragment, family, traits),
-        YogaLayoutableShadowNode(
-            traits.check(ShadowNodeTraits::Trait::LeafYogaNode)) {
+      const ShadowNodeFragment &fragment,
+      const ComponentDescriptor &componentDescriptor)
+      : BaseShadowNode(fragment, componentDescriptor),
+        YogaLayoutableShadowNode() {
     YogaLayoutableShadowNode::setProps(
         *std::static_pointer_cast<const ConcreteViewProps>(fragment.props));
     YogaLayoutableShadowNode::setChildren(
@@ -67,8 +65,8 @@ class ConcreteViewShadowNode : public ConcreteShadowNode<
   };
 
   ConcreteViewShadowNode(
-      ShadowNode const &sourceShadowNode,
-      ShadowNodeFragment const &fragment)
+      const ShadowNode &sourceShadowNode,
+      const ShadowNodeFragment &fragment)
       : BaseShadowNode(sourceShadowNode, fragment),
         YogaLayoutableShadowNode(
             static_cast<const ConcreteViewShadowNode &>(sourceShadowNode)) {
@@ -84,7 +82,7 @@ class ConcreteViewShadowNode : public ConcreteShadowNode<
     }
   };
 
-  void appendChild(const ShadowNode::Shared &child) {
+  void appendChild(const SharedShadowNode &child) {
     ensureUnsealed();
 
     ShadowNode::appendChild(child);
@@ -106,12 +104,14 @@ class ConcreteViewShadowNode : public ConcreteShadowNode<
         std::static_pointer_cast<ConcreteViewShadowNode>(
             childShadowNode->clone({}));
     ShadowNode::replaceChild(
-        *childShadowNode, clonedChildShadowNode, suggestedIndex);
+        childShadowNode->shared_from_this(),
+        clonedChildShadowNode,
+        suggestedIndex);
     return clonedChildShadowNode.get();
   }
 
   Transform getTransform() const override {
-    return BaseShadowNode::getConcreteProps().transform;
+    return BaseShadowNode::getProps()->transform;
   }
 
 #pragma mark - DebugStringConvertible

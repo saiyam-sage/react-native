@@ -5,9 +5,7 @@ fb_apple_library(
     autoglob = True,
     contacts = ["oncall+react_native@xmail.facebook.com"],
     enable_exceptions = False,
-    extension_api_only = True,
     frameworks = [],
-    labels = ["supermodule:ios/default/private.react_native.infra"],
     link_whole = False,
     visibility = ["PUBLIC"],
 )

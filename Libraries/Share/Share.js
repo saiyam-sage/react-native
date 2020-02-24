@@ -19,22 +19,13 @@ import NativeActionSheetManager from '../ActionSheetIOS/NativeActionSheetManager
 import NativeShareModule from './NativeShareModule';
 
 type Content =
-  | {
-      title?: string,
-      message: string,
-      ...
-    }
-  | {
-      title?: string,
-      url: string,
-      ...
-    };
+  | {title?: string, message: string}
+  | {title?: string, url: string};
 type Options = {
   dialogTitle?: string,
   excludedActivityTypes?: Array<string>,
   tintColor?: string,
   subject?: string,
-  ...
 };
 
 class Share {
@@ -50,16 +41,13 @@ class Share {
    * ### Content
    *
    *  - `message` - a message to share
+   *  - `title` - title of the message
    *
    * #### iOS
    *
    *  - `url` - an URL to share
    *
    * At least one of URL and message is required.
-   *
-   * #### Android
-   *
-   * - `title` - title of the message
    *
    * ### Options
    *
@@ -108,11 +96,6 @@ class Share {
     } else if (Platform.OS === 'ios') {
       return new Promise((resolve, reject) => {
         const tintColor = processColor(options.tintColor);
-
-        invariant(
-          tintColor == null || typeof tintColor === 'number',
-          'Unexpected color given for options.tintColor',
-        );
 
         invariant(
           NativeActionSheetManager,

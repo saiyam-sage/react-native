@@ -1,9 +1,7 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright (c) Facebook, Inc. and its affiliates.
+
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
 
 #include "Differentiator.h"
 
@@ -147,6 +145,10 @@ static void calculateShadowViewMutations(
     ShadowViewNodePair::List const &newChildPairs) {
   // The current version of the algorithm is optimized for simplicity,
   // not for performance or optimal result.
+
+  if (oldChildPairs == newChildPairs) {
+    return;
+  }
 
   if (oldChildPairs.size() == 0 && newChildPairs.size() == 0) {
     return;

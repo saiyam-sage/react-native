@@ -1,9 +1,7 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright (c) Facebook, Inc. and its affiliates.
+
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
 
 #pragma once
 
@@ -30,12 +28,6 @@ struct Point {
     return *this;
   }
 
-  Point &operator-=(const Point &point) {
-    x -= point.x;
-    y -= point.y;
-    return *this;
-  }
-
   Point &operator*=(const Point &point) {
     x *= point.x;
     y *= point.y;
@@ -44,10 +36,6 @@ struct Point {
 
   friend Point operator+(Point lhs, const Point &rhs) {
     return lhs += rhs;
-  }
-
-  friend Point operator-(Point lhs, const Point &rhs) {
-    return lhs -= rhs;
   }
 
   bool operator==(const Point &rhs) const {
@@ -124,12 +112,6 @@ struct Rect {
     origin = {x1, y1};
     size = {x2 - x1, y2 - y1};
   }
-
-  bool containsPoint(Point point) {
-    return point.x >= origin.x && point.y >= origin.y &&
-        point.x <= (origin.x + size.width) &&
-        point.y <= (origin.y + size.height);
-  }
 };
 
 /*
@@ -156,26 +138,6 @@ struct RectangleEdges {
     return left == top && left == right && left == bottom;
   }
 };
-
-template <typename T>
-RectangleEdges<T> operator+(
-    RectangleEdges<T> const &lhs,
-    RectangleEdges<T> const &rhs) {
-  return RectangleEdges<T>{lhs.left + rhs.left,
-                           lhs.top + rhs.top,
-                           lhs.right + rhs.right,
-                           lhs.bottom + rhs.bottom};
-}
-
-template <typename T>
-RectangleEdges<T> operator-(
-    RectangleEdges<T> const &lhs,
-    RectangleEdges<T> const &rhs) {
-  return RectangleEdges<T>{lhs.left - rhs.left,
-                           lhs.top - rhs.top,
-                           lhs.right - rhs.right,
-                           lhs.bottom - rhs.bottom};
-}
 
 /*
  * Generic data structure describes some values associated with *corners*

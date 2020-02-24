@@ -1,13 +1,10 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * <p>This source code is licensed under the MIT license found in the LICENSE file in the root
+ * directory of this source tree.
  */
-
 package com.facebook.react.bridge;
-
-import static com.facebook.infer.annotation.ThreadConfined.UI;
 
 import android.app.Activity;
 import android.content.Context;
@@ -16,14 +13,10 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import androidx.annotation.Nullable;
-import com.facebook.common.logging.FLog;
 import com.facebook.infer.annotation.Assertions;
-import com.facebook.infer.annotation.ThreadConfined;
 import com.facebook.react.bridge.queue.MessageQueueThread;
 import com.facebook.react.bridge.queue.ReactQueueConfiguration;
 import com.facebook.react.common.LifecycleState;
-import com.facebook.react.common.ReactConstants;
-import com.facebook.react.config.ReactFeatureFlags;
 import java.lang.ref.WeakReference;
 import java.util.concurrent.CopyOnWriteArraySet;
 
@@ -124,14 +117,14 @@ public class ReactContext extends ContextWrapper {
    */
   public <T extends JavaScriptModule> T getJSModule(Class<T> jsInterface) {
     if (mCatalystInstance == null) {
-      throw new IllegalStateException(EARLY_JS_ACCESS_EXCEPTION_MESSAGE);
+      throw new RuntimeException(EARLY_JS_ACCESS_EXCEPTION_MESSAGE);
     }
     return mCatalystInstance.getJSModule(jsInterface);
   }
 
   public <T extends NativeModule> boolean hasNativeModule(Class<T> nativeModuleInterface) {
     if (mCatalystInstance == null) {
-      throw new IllegalStateException(
+      throw new RuntimeException(
           "Trying to call native module before CatalystInstance has been set!");
     }
     return mCatalystInstance.hasNativeModule(nativeModuleInterface);
@@ -140,7 +133,7 @@ public class ReactContext extends ContextWrapper {
   /** @return the instance of the specified module interface associated with this ReactContext. */
   public <T extends NativeModule> T getNativeModule(Class<T> nativeModuleInterface) {
     if (mCatalystInstance == null) {
-      throw new IllegalStateException(
+      throw new RuntimeException(
           "Trying to call native module before CatalystInstance has been set!");
     }
     return mCatalystInstance.getNativeModule(nativeModuleInterface);
@@ -186,7 +179,7 @@ public class ReactContext extends ContextWrapper {
               });
           break;
         default:
-          throw new IllegalStateException("Unhandled lifecycle state.");
+          throw new RuntimeException("Unhandled lifecycle state.");
       }
     }
   }
@@ -226,7 +219,6 @@ public class ReactContext extends ContextWrapper {
     ReactMarker.logMarker(ReactMarkerConstants.ON_HOST_RESUME_END);
   }
 
-  @ThreadConfined(UI)
   public void onNewIntent(@Nullable Activity activity, Intent intent) {
     UiThreadUtil.assertOnUiThread();
     mCurrentActivity = new WeakReference(activity);
@@ -254,7 +246,6 @@ public class ReactContext extends ContextWrapper {
   }
 
   /** Should be called by the hosting Fragment in {@link Fragment#onDestroy} */
-  @ThreadConfined(UI)
   public void onHostDestroy() {
     UiThreadUtil.assertOnUiThread();
     mLifecycleState = LifecycleState.BEFORE_CREATE;
@@ -269,15 +260,11 @@ public class ReactContext extends ContextWrapper {
   }
 
   /** Destroy this instance, making it unusable. */
-  @ThreadConfined(UI)
   public void destroy() {
     UiThreadUtil.assertOnUiThread();
 
     if (mCatalystInstance != null) {
       mCatalystInstance.destroy();
-      if (ReactFeatureFlags.nullifyCatalystInstanceOnDestroy) {
-        mCatalystInstance = null;
-      }
     }
   }
 
@@ -292,7 +279,6 @@ public class ReactContext extends ContextWrapper {
     }
   }
 
-  @ThreadConfined(UI)
   public void onWindowFocusChange(boolean hasFocus) {
     UiThreadUtil.assertOnUiThread();
     for (WindowFocusChangeListener listener : mWindowFocusEventListeners) {
@@ -350,24 +336,12 @@ public class ReactContext extends ContextWrapper {
    * otherwise.
    */
   public void handleException(Exception e) {
-    boolean catalystInstanceVariableExists = mCatalystInstance != null;
-    boolean isCatalystInstanceAlive =
-        catalystInstanceVariableExists && !mCatalystInstance.isDestroyed();
-    boolean hasExceptionHandler = mNativeModuleCallExceptionHandler != null;
-
-    if (isCatalystInstanceAlive && hasExceptionHandler) {
+    if (mCatalystInstance != null
+        && !mCatalystInstance.isDestroyed()
+        && mNativeModuleCallExceptionHandler != null) {
       mNativeModuleCallExceptionHandler.handleException(e);
     } else {
-      FLog.e(
-          ReactConstants.TAG,
-          "Unable to handle Exception - catalystInstanceVariableExists: "
-              + catalystInstanceVariableExists
-              + " - isCatalystInstanceAlive: "
-              + !isCatalystInstanceAlive
-              + " - hasExceptionHandler: "
-              + hasExceptionHandler,
-          e);
-      throw new IllegalStateException(e);
+      throw new RuntimeException(e);
     }
   }
 
@@ -413,11 +387,6 @@ public class ReactContext extends ContextWrapper {
     return mCurrentActivity.get();
   }
 
-  /** @deprecated DO NOT USE, this method will be removed in the near future. */
-  public boolean isBridgeless() {
-    return false;
-  }
-
   /**
    * Get the C pointer (as a long) to the JavaScriptCore context associated with this instance. Use
    * the following pattern to ensure that the JS context is not cleared while you are using it:
@@ -426,13 +395,5 @@ public class ReactContext extends ContextWrapper {
    */
   public JavaScriptContextHolder getJavaScriptContextHolder() {
     return mCatalystInstance.getJavaScriptContextHolder();
-  }
-
-  public JSIModule getJSIModule(JSIModuleType moduleType) {
-    if (!hasActiveCatalystInstance()) {
-      throw new IllegalStateException(
-          "Unable to retrieve a JSIModule if CatalystInstance is not active.");
-    }
-    return mCatalystInstance.getJSIModule(moduleType);
   }
 }

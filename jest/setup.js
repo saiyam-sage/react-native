@@ -89,10 +89,7 @@ jest
     mockComponent('../Libraries/Text/Text', MockNativeMethods),
   )
   .mock('../Libraries/Components/TextInput/TextInput', () =>
-    mockComponent(
-      '../Libraries/Components/TextInput/TextInput',
-      MockNativeMethods,
-    ),
+    mockComponent('../Libraries/Components/TextInput/TextInput'),
   )
   .mock('../Libraries/Modal/Modal', () =>
     mockComponent('../Libraries/Modal/Modal'),
@@ -109,7 +106,7 @@ jest
     isInvertColorsEnabled: jest.fn(),
     isReduceMotionEnabled: jest.fn(),
     isReduceTransparencyEnabled: jest.fn(),
-    isScreenReaderEnabled: jest.fn(() => Promise.resolve(false)),
+    isScreenReaderEnabled: jest.fn(),
     removeEventListener: jest.fn(),
     setAccessibilityFocus: jest.fn(),
   }))
@@ -128,6 +125,27 @@ jest
       '../Libraries/Components/ActivityIndicator/ActivityIndicator',
     ),
   )
+  .mock('../Libraries/Animated/src/Animated', () => {
+    const Animated = jest.requireActual('../Libraries/Animated/src/Animated');
+    Animated.Text.__skipSetNativeProps_FOR_TESTS_ONLY = true;
+    Animated.View.__skipSetNativeProps_FOR_TESTS_ONLY = true;
+    return Animated;
+  })
+  .mock('../Libraries/Animated/src/AnimatedImplementation', () => {
+    const AnimatedImplementation = jest.requireActual(
+      '../Libraries/Animated/src/AnimatedImplementation',
+    );
+    const oldCreate = AnimatedImplementation.createAnimatedComponent;
+    AnimatedImplementation.createAnimatedComponent = function(
+      Component,
+      defaultProps,
+    ) {
+      const Wrapped = oldCreate(Component, defaultProps);
+      Wrapped.__skipSetNativeProps_FOR_TESTS_ONLY = true;
+      return Wrapped;
+    };
+    return AnimatedImplementation;
+  })
   .mock('../Libraries/AppState/AppState', () => ({
     addEventListener: jest.fn(),
     removeEventListener: jest.fn(),
@@ -141,6 +159,19 @@ jest
     removeEventListener: jest.fn(),
     sendIntent: jest.fn(),
   }))
+  .mock('../Libraries/Renderer/shims/ReactNative', () => {
+    const ReactNative = jest.requireActual(
+      '../Libraries/Renderer/shims/ReactNative',
+    );
+    const NativeMethodsMixin =
+      ReactNative.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
+        .NativeMethodsMixin;
+
+    Object.assign(NativeMethodsMixin, MockNativeMethods);
+    Object.assign(ReactNative.NativeComponent.prototype, MockNativeMethods);
+
+    return ReactNative;
+  })
   // Mock modules defined by the native layer (ex: Objective-C, Java)
   .mock('../Libraries/BatchedBridge/NativeModules', () => ({
     AlertManager: {
@@ -302,14 +333,6 @@ jest
         render() {
           return React.createElement(viewName, this.props, this.props.children);
         }
-
-        // The methods that exist on host components
-        blur = jest.fn();
-        focus = jest.fn();
-        measure = jest.fn();
-        measureInWindow = jest.fn();
-        measureLayout = jest.fn();
-        setNativeProps = jest.fn();
       };
 
       if (viewName === 'RCTView') {

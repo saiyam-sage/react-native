@@ -1,9 +1,4 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 #include "HermesExecutorFactory.h"
 
@@ -50,21 +45,18 @@ class HermesExecutorRuntimeAdapter
 
   virtual ~HermesExecutorRuntimeAdapter() = default;
 
-  jsi::Runtime &getRuntime() override {
-    return *runtime_;
-  }
-
-  debugger::Debugger &getDebugger() override {
-    return hermesRuntime_.getDebugger();
+  HermesRuntime &getRuntime() override {
+    return hermesRuntime_;
   }
 
   void tickleJs() override {
     // The queue will ensure that runtime_ is still valid when this
     // gets invoked.
-    thread_->runOnQueue([&runtime = runtime_]() {
-      auto func =
-          runtime->global().getPropertyAsFunction(*runtime, "__tickleJs");
-      func.call(*runtime);
+    // clang-format off
+    thread_->runOnQueue([&runtime = hermesRuntime_]() {
+      // clang-format on
+      auto func = runtime.global().getPropertyAsFunction(runtime, "__tickleJs");
+      func.call(runtime);
     });
   }
 
@@ -196,7 +188,7 @@ std::unique_ptr<JSExecutor> HermesExecutorFactory::createJSExecutor(
     std::shared_ptr<MessageQueueThread> jsQueue) {
   std::unique_ptr<HermesRuntime> hermesRuntime =
       makeHermesRuntimeSystraced(runtimeConfig_);
-  HermesRuntime &hermesRuntimeRef = *hermesRuntime;
+  HermesRuntime& hermesRuntimeRef = *hermesRuntime;
   auto decoratedRuntime = std::make_shared<DecoratedRuntime>(
       makeTracingHermesRuntime(std::move(hermesRuntime), runtimeConfig_),
       hermesRuntimeRef,

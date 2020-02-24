@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -202,52 +202,14 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:unused)
 
 - (NSString *)accessibilityValue
 {
-  static dispatch_once_t onceToken;
-  static NSDictionary<NSString *, NSString *> *rolesAndStatesDescription = nil;
-
-  dispatch_once(&onceToken, ^{
-    NSString *bundlePath = [[NSBundle mainBundle]pathForResource:@"AccessibilityResources" ofType:@"bundle"];
-    NSBundle *bundle = [NSBundle bundleWithPath:bundlePath];
-
-    if (bundle) {
-      NSURL *url = [bundle URLForResource:@"Localizable" withExtension:@"strings"];
-      if (@available(iOS 11.0, *)) {
-        rolesAndStatesDescription = [NSDictionary dictionaryWithContentsOfURL:url error:nil];
-      } else {
-        // Fallback on earlier versions
-        rolesAndStatesDescription = [NSDictionary dictionaryWithContentsOfURL:url];
+  if ((self.accessibilityTraits & SwitchAccessibilityTrait) == SwitchAccessibilityTrait) {
+    for (NSString *state in self.accessibilityStates) {
+      if ([state isEqualToString:@"checked"]) {
+        return @"1";
+      } else if ([state isEqualToString:@"unchecked"]) {
+        return @"0";
       }
     }
-    if (rolesAndStatesDescription == nil) {
-      NSLog(@"Cannot load localized accessibility strings.");
-      rolesAndStatesDescription = @{
-                           @"alert" : @"alert",
-                           @"checkbox" : @"checkbox",
-                           @"combobox" : @"combo box",
-                           @"menu" : @"menu",
-                           @"menubar" : @"menu bar",
-                           @"menuitem" : @"menu item",
-                           @"progressbar" : @"progress bar",
-                           @"radio" : @"radio button",
-                           @"radiogroup" : @"radio group",
-                           @"scrollbar" : @"scroll bar",
-                           @"spinbutton" : @"spin button",
-                           @"switch" : @"switch",
-                           @"tab" : @"tab",
-                           @"tablist" : @"tab list",
-                           @"timer" : @"timer",
-                           @"toolbar" : @"tool bar",
-                           @"checked" : @"checked",
-                           @"unchecked" : @"not checked",
-                           @"busy" : @"busy",
-                           @"expanded" : @"expanded",
-                           @"collapsed" : @"collapsed",
-                           @"mixed": @"mixed",
-                           };
-      }
-  });
-
-  if ((self.accessibilityTraits & SwitchAccessibilityTrait) == SwitchAccessibilityTrait) {
     for (NSString *state in self.accessibilityState) {
       id val = self.accessibilityState[state];
       if (!val) {
@@ -259,9 +221,49 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:unused)
     }
   }
   NSMutableArray *valueComponents = [NSMutableArray new];
-  NSString *roleDescription = self.accessibilityRole ? rolesAndStatesDescription[self.accessibilityRole]: nil;
+  static NSDictionary<NSString *, NSString *> *roleDescriptions = nil;
+  static dispatch_once_t onceToken1;
+  dispatch_once(&onceToken1, ^{
+    roleDescriptions = @{
+                         @"alert" : @"alert",
+                         @"checkbox" : @"checkbox",
+                         @"combobox" : @"combo box",
+                         @"menu" : @"menu",
+                         @"menubar" : @"menu bar",
+                         @"menuitem" : @"menu item",
+                         @"progressbar" : @"progress bar",
+                         @"radio" : @"radio button",
+                         @"radiogroup" : @"radio group",
+                         @"scrollbar" : @"scroll bar",
+                         @"spinbutton" : @"spin button",
+                         @"switch" : @"switch",
+                         @"tab" : @"tab",
+                         @"tablist" : @"tab list",
+                         @"timer" : @"timer",
+                         @"toolbar" : @"tool bar",
+                         };
+  });
+  static NSDictionary<NSString *, NSString *> *stateDescriptions = nil;
+  static dispatch_once_t onceToken2;
+  dispatch_once(&onceToken2, ^{
+    stateDescriptions = @{
+                          @"checked" : @"checked",
+                          @"unchecked" : @"not checked",
+                          @"busy" : @"busy",
+                          @"expanded" : @"expanded",
+                          @"collapsed" : @"collapsed",
+                          @"mixed": @"mixed",
+                          };
+  });
+  NSString *roleDescription = self.accessibilityRole ? roleDescriptions[self.accessibilityRole]: nil;
   if (roleDescription) {
     [valueComponents addObject:roleDescription];
+  }
+  for (NSString *state in self.accessibilityStates) {
+    NSString *stateDescription = state ? stateDescriptions[state] : nil;
+    if (stateDescription) {
+      [valueComponents addObject:stateDescription];
+    }
   }
   for (NSString *state in self.accessibilityState) {
     id val = self.accessibilityState[state];
@@ -270,38 +272,18 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:unused)
     }
     if ([state isEqualToString:@"checked"]) {
       if ([val isKindOfClass:[NSNumber class]]) {
-        [valueComponents addObject:rolesAndStatesDescription[[val boolValue] ? @"checked" : @"unchecked"]];
+        [valueComponents addObject:stateDescriptions[[val boolValue] ? @"checked" : @"unchecked"]];
       } else if ([val isKindOfClass:[NSString class]] && [val isEqualToString:@"mixed"]) {
-        [valueComponents addObject:rolesAndStatesDescription[@"mixed"]];
+        [valueComponents addObject:stateDescriptions[@"mixed"]];
       }
     }
     if ([state isEqualToString:@"expanded"] && [val isKindOfClass:[NSNumber class]]) {
-      [valueComponents addObject:rolesAndStatesDescription[[val boolValue] ? @"expanded" : @"collapsed"]];
+      [valueComponents addObject:stateDescriptions[[val boolValue] ? @"expanded" : @"collapsed"]];
     }
     if ([state isEqualToString:@"busy"] && [val isKindOfClass:[NSNumber class]] && [val boolValue]) {
-      [valueComponents addObject:rolesAndStatesDescription[@"busy"]];
+      [valueComponents addObject:stateDescriptions[@"busy"]];
     }
   }
-  
-  // handle accessibilityValue
-
-  if (self.accessibilityValueInternal) {
-    id min = self.accessibilityValueInternal[@"min"];
-    id now = self.accessibilityValueInternal[@"now"];
-    id max = self.accessibilityValueInternal[@"max"];
-    id text = self.accessibilityValueInternal[@"text"];
-    if (text && [text isKindOfClass:[NSString class]]) {
-      [valueComponents addObject:text];
-    } else if ([min isKindOfClass:[NSNumber class]] &&
-        [now isKindOfClass:[NSNumber class]] &&
-        [max isKindOfClass:[NSNumber class]] &&
-        ([min intValue] < [max intValue]) &&
-        ([min intValue] <= [now intValue] && [now intValue] <= [max intValue])) {
-      int val = ([now intValue]*100)/([max intValue]-[min intValue]);
-      [valueComponents addObject:[NSString stringWithFormat:@"%d percent", val]];
-    }
-  }
-
   if (valueComponents.count > 0) {
     return [valueComponents componentsJoinedByString:@", "];
   }
@@ -404,7 +386,8 @@ RCT_NOT_IMPLEMENTED(- (instancetype)initWithCoder:unused)
 {
   if ([self performAccessibilityAction:@"activate"]) {
     return YES;
-  } else if (_onAccessibilityTap) {
+  }
+  else if (_onAccessibilityTap) {
     _onAccessibilityTap(nil);
     return YES;
   } else {

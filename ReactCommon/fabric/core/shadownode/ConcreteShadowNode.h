@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -35,10 +35,10 @@ class ConcreteShadowNode : public ShadowNode {
   using ShadowNode::ShadowNode;
 
   using ConcreteProps = PropsT;
-  using SharedConcreteProps = std::shared_ptr<PropsT const>;
+  using SharedConcreteProps = std::shared_ptr<const PropsT>;
   using ConcreteEventEmitter = EventEmitterT;
-  using SharedConcreteEventEmitter = std::shared_ptr<EventEmitterT const>;
-  using SharedConcreteShadowNode = std::shared_ptr<ConcreteShadowNode const>;
+  using SharedConcreteEventEmitter = std::shared_ptr<const EventEmitterT>;
+  using SharedConcreteShadowNode = std::shared_ptr<const ConcreteShadowNode>;
   using ConcreteState = ConcreteState<StateDataT>;
   using ConcreteStateData = StateDataT;
 
@@ -50,19 +50,12 @@ class ConcreteShadowNode : public ShadowNode {
     return ComponentHandle(concreteComponentName);
   }
 
-  /*
-   * A set of traits associated with a particular class.
-   * Reimplement in subclasses to declare class-specific traits.
-   */
-  static ShadowNodeTraits BaseTraits() {
-    return ShadowNodeTraits{};
-  }
-
   static SharedConcreteProps Props(
-      RawProps const &rawProps,
-      SharedProps const &baseProps = nullptr) {
-    return std::make_shared<PropsT const>(
-        baseProps ? static_cast<PropsT const &>(*baseProps) : PropsT(),
+      const RawProps &rawProps,
+      const SharedProps &baseProps = nullptr) {
+    return std::make_shared<const PropsT>(
+        baseProps ? *std::static_pointer_cast<const PropsT>(baseProps)
+                  : PropsT(),
         rawProps);
   }
 
@@ -74,21 +67,24 @@ class ConcreteShadowNode : public ShadowNode {
 
   static ConcreteStateData initialStateData(
       ShadowNodeFragment const &fragment,
-      SurfaceId const surfaceId,
       ComponentDescriptor const &componentDescriptor) {
     return {};
   }
 
-  /*
-   * Returns a concrete props object associated with the node.
-   * Thread-safe after the node is sealed.
-   */
-  ConcreteProps const &getConcreteProps() const {
+  ComponentName getComponentName() const override {
+    return ComponentName(concreteComponentName);
+  }
+
+  ComponentHandle getComponentHandle() const override {
+    return reinterpret_cast<ComponentHandle>(concreteComponentName);
+  }
+
+  const SharedConcreteProps getProps() const {
     assert(props_ && "Props must not be `nullptr`.");
     assert(
         std::dynamic_pointer_cast<ConcreteProps const>(props_) &&
         "Props must be an instance of ConcreteProps class.");
-    return static_cast<ConcreteProps const &>(*props_);
+    return std::static_pointer_cast<ConcreteProps const>(props_);
   }
 
   /*
@@ -100,7 +96,7 @@ class ConcreteShadowNode : public ShadowNode {
     assert(
         std::dynamic_pointer_cast<ConcreteState const>(state_) &&
         "State must be an instance of ConcreteState class.");
-    return static_cast<ConcreteState const *>(state_.get())->getData();
+    return std::static_pointer_cast<ConcreteState const>(state_)->getData();
   }
 
   /*
@@ -109,8 +105,7 @@ class ConcreteShadowNode : public ShadowNode {
    */
   void setStateData(ConcreteStateData &&data) {
     ensureUnsealed();
-    state_ = std::make_shared<ConcreteState const>(
-        std::make_shared<ConcreteStateData const>(std::move(data)), *state_);
+    state_ = std::make_shared<ConcreteState const>(std::move(data), *state_);
   }
 
   /*
@@ -123,9 +118,9 @@ class ConcreteShadowNode : public ShadowNode {
     better::
         small_vector<SpecificShadowNodeT *, kShadowNodeChildrenSmallVectorSize>
             children;
-    for (auto const &childShadowNode : getChildren()) {
+    for (const auto &childShadowNode : getChildren()) {
       auto specificChildShadowNode =
-          dynamic_cast<SpecificShadowNodeT const *>(childShadowNode.get());
+          dynamic_cast<const SpecificShadowNodeT *>(childShadowNode.get());
       if (specificChildShadowNode) {
         children.push_back(
             const_cast<SpecificShadowNodeT *>(specificChildShadowNode));

@@ -1,21 +1,16 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * <p>This source code is licensed under the MIT license found in the LICENSE file in the root
+ * directory of this source tree.
  */
-
 package com.facebook.react.modules.deviceinfo;
 
 import android.content.Context;
 import androidx.annotation.Nullable;
+import com.facebook.react.bridge.BaseJavaModule;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactApplicationContext;
-import com.facebook.react.bridge.ReactContextBaseJavaModule;
-import com.facebook.react.bridge.ReactNoCrashSoftException;
-import com.facebook.react.bridge.ReactSoftException;
-import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.WritableNativeMap;
 import com.facebook.react.module.annotations.ReactModule;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 import com.facebook.react.turbomodule.core.interfaces.TurboModule;
@@ -25,25 +20,21 @@ import java.util.Map;
 
 /** Module that exposes Android Constants to JS. */
 @ReactModule(name = DeviceInfoModule.NAME)
-public class DeviceInfoModule extends ReactContextBaseJavaModule
+public class DeviceInfoModule extends BaseJavaModule
     implements LifecycleEventListener, TurboModule {
 
   public static final String NAME = "DeviceInfo";
 
   private @Nullable ReactApplicationContext mReactApplicationContext;
   private float mFontScale;
-  private @Nullable ReadableMap mPreviousDisplayMetrics;
 
   public DeviceInfoModule(ReactApplicationContext reactContext) {
-    super(reactContext);
-    DisplayMetricsHolder.initDisplayMetricsIfNotInitialized(reactContext);
-    mFontScale = reactContext.getResources().getConfiguration().fontScale;
+    this((Context) reactContext);
     mReactApplicationContext = reactContext;
     mReactApplicationContext.addLifecycleEventListener(this);
   }
 
   public DeviceInfoModule(Context context) {
-    super(null);
     mReactApplicationContext = null;
     DisplayMetricsHolder.initDisplayMetricsIfNotInitialized(context);
     mFontScale = context.getResources().getConfiguration().fontScale;
@@ -85,24 +76,9 @@ public class DeviceInfoModule extends ReactContextBaseJavaModule
       return;
     }
 
-    if (mReactApplicationContext.hasActiveCatalystInstance()) {
-      // Don't emit an event to JS if the dimensions haven't changed
-      WritableNativeMap displayMetrics =
-          DisplayMetricsHolder.getDisplayMetricsNativeMap(mFontScale);
-      if (mPreviousDisplayMetrics == null) {
-        mPreviousDisplayMetrics = displayMetrics.copy();
-      } else if (!displayMetrics.equals(mPreviousDisplayMetrics)) {
-        mPreviousDisplayMetrics = displayMetrics.copy();
-        mReactApplicationContext
-            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-            .emit("didUpdateDimensions", displayMetrics);
-      }
-    } else {
-      ReactSoftException.logSoftException(
-          NAME,
-          new ReactNoCrashSoftException(
-              "No active CatalystInstance, cannot emitUpdateDimensionsEvent"));
-    }
+    mReactApplicationContext
+        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+        .emit("didUpdateDimensions", DisplayMetricsHolder.getDisplayMetricsNativeMap(mFontScale));
   }
 
   @Override

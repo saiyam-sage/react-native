@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -15,8 +15,6 @@
   NSInteger _listenerCount;
 }
 
-@synthesize invokeJS = _invokeJS;
-
 + (NSString *)moduleName
 {
   return @"";
@@ -24,7 +22,6 @@
 
 + (void)initialize
 {
-  [super initialize];
   if (self != [RCTEventEmitter class]) {
     RCTAssert(RCTClassOverridesInstanceMethod(self, @selector(supportedEvents)),
               @"You must override the `supportedEvents` method of %@", self);
@@ -38,7 +35,7 @@
 
 - (void)sendEventWithName:(NSString *)eventName body:(id)body
 {
-  RCTAssert(_bridge != nil || _invokeJS != nil, @"Error when sending event: %@ with body: %@. "
+  RCTAssert(_bridge != nil, @"Error when sending event: %@ with body: %@. "
             "Bridge is not set. This is probably because you've "
             "explicitly synthesized the bridge in %@, even though it's inherited "
             "from RCTEventEmitter.", eventName, body, [self class]);
@@ -47,13 +44,11 @@
     RCTLogError(@"`%@` is not a supported event type for %@. Supported events are: `%@`",
                 eventName, [self class], [[self supportedEvents] componentsJoinedByString:@"`, `"]);
   }
-  if (_listenerCount > 0 && _bridge) {
+  if (_listenerCount > 0) {
     [_bridge enqueueJSCall:@"RCTDeviceEventEmitter"
                     method:@"emit"
                       args:body ? @[eventName, body] : @[eventName]
                 completion:NULL];
-  } else if (_listenerCount > 0 && _invokeJS) {
-    _invokeJS(@"RCTDeviceEventEmitter", @"emit", body ? @[eventName, body] : @[eventName]);
   } else {
     RCTLogWarn(@"Sending `%@` with no listeners registered.", eventName);
   }

@@ -1,10 +1,7 @@
-/*
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
+// Copyright (c) Facebook, Inc. and its affiliates.
 
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
 #include <sys/mman.h>
 #include <fcntl.h>
 
@@ -58,9 +55,9 @@ TEST(JSBigFileString, MapPartTest) {
   JSBigFileString bigStr {fd, needle.size(), offset};
 
   // Test
-  EXPECT_EQ(needle.length(), bigStr.size());
+  ASSERT_EQ(needle.length(), bigStr.size());
   for (unsigned int i = 0; i < needle.length(); ++i) {
-    EXPECT_EQ(needle[i], bigStr.c_str()[i]);
+    ASSERT_EQ(needle[i], bigStr.c_str()[i]);
   }
 }
 
@@ -96,13 +93,13 @@ TEST(JSBigFileString, RemapTest) {
   int fd = tempFileFromString(data);
   JSBigFileString bigStr {fd, data.size()};
 
-  EXPECT_EQ(pageSize * 2, bigStr.size());
+  ASSERT_EQ(pageSize * 2, bigStr.size());
   auto remapped = bigStr.c_str();
   size_t i = 0;
   for (; i < pageSize; ++i) {
-    EXPECT_EQ(0x22, remapped[i]);
+    ASSERT_EQ(0x22, remapped[i]);
   }
   for (; i < pageSize * 2; ++i) {
-    EXPECT_EQ(0x11, remapped[i]);
+    ASSERT_EQ(0x11, remapped[i]);
   }
 }

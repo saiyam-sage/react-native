@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -10,7 +10,7 @@
 #import "RCTConvert.h"
 #import "RCTUtils.h"
 
-@interface RCTPicker() <UIPickerViewDataSource, UIPickerViewDelegate, UIPickerViewAccessibilityDelegate>
+@interface RCTPicker() <UIPickerViewDataSource, UIPickerViewDelegate>
 @end
 
 @implementation RCTPicker
@@ -107,12 +107,6 @@ numberOfRowsInComponent:(__unused NSInteger)component
       @"newValue": RCTNullIfNil(_items[row][@"value"]),
     });
   }
-}
-
-#pragma mark - UIPickerViewAccessibilityDelegate protocol
-
-- (NSString *)pickerView:(UIPickerView *)pickerView accessibilityLabelForComponent:(NSInteger)component{
-    return super.accessibilityLabel;
 }
 
 @end

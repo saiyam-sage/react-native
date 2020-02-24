@@ -18,30 +18,25 @@ const React = require('react');
 const ReactNative = require('../Renderer/shims/ReactNative');
 const StyleSheet = require('../StyleSheet/StyleSheet');
 const Touchable = require('../Components/Touchable/Touchable');
+const UIManager = require('../ReactNative/UIManager');
 const View = require('../Components/View/View');
 
 const invariant = require('invariant');
 
-import type {HostComponent} from '../Renderer/shims/ReactNativeTypes';
-
 export type ReactRenderer = {
   getInspectorDataForViewTag: (viewTag: number) => Object,
-  ...
 };
 
 const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
 const renderers = findRenderers();
 
-// Required for React DevTools to view/edit React Native styles in Flipper.
-// Flipper doesn't inject these values when initializing DevTools.
+// required for devtools to be able to edit react native styles
 hook.resolveRNStyle = require('../StyleSheet/flattenStyle');
-const viewConfig = require('../Components/View/ReactNativeViewViewConfig.js');
-hook.nativeStyleEditorValidAttributes = Object.keys(
-  viewConfig.validAttributes.style,
-);
 
 function findRenderers(): $ReadOnlyArray<ReactRenderer> {
-  const allRenderers = Array.from(hook.renderers.values());
+  const allRenderers = Object.keys(hook._renderers).map(
+    key => hook._renderers[key],
+  );
   invariant(
     allRenderers.length >= 1,
     'Expected to find at least one React Native renderer on DevTools hook.',
@@ -66,15 +61,10 @@ function getInspectorDataForViewTag(touchedViewTag: number) {
   }
   throw new Error('Expected to find at least one React renderer.');
 }
-
-type HostRef = React.ElementRef<HostComponent<mixed>>;
-
 class Inspector extends React.Component<
   {
-    isFabric: boolean,
-    inspectedView: ?HostRef,
-    onRequestRerenderApp: (callback: (instance: ?HostRef) => void) => void,
-    ...
+    inspectedViewTag: ?number,
+    onRequestRerenderApp: (callback: (tag: ?number) => void) => void,
   },
   {
     devtoolsAgent: ?Object,
@@ -84,12 +74,10 @@ class Inspector extends React.Component<
     selection: ?number,
     perfing: boolean,
     inspected: any,
-    inspectedView: ?HostRef,
+    inspectedViewTag: any,
     networking: boolean,
-    ...
   },
 > {
-  _hideTimeoutID: TimeoutID | null = null;
   _subs: ?Array<() => void>;
 
   constructor(props: Object) {
@@ -103,16 +91,16 @@ class Inspector extends React.Component<
       perfing: false,
       inspected: null,
       selection: null,
-      inspectedView: this.props.inspectedView,
+      inspectedViewTag: this.props.inspectedViewTag,
       networking: false,
     };
   }
 
   componentDidMount() {
-    hook.on('react-devtools', this._attachToDevtools);
+    hook.on('react-devtools', this.attachToDevtools);
     // if devtools is already started
     if (hook.reactDevtoolsAgent) {
-      this._attachToDevtools(hook.reactDevtoolsAgent);
+      this.attachToDevtools(hook.reactDevtoolsAgent);
     }
   }
 
@@ -120,63 +108,53 @@ class Inspector extends React.Component<
     if (this._subs) {
       this._subs.map(fn => fn());
     }
-    hook.off('react-devtools', this._attachToDevtools);
+    hook.off('react-devtools', this.attachToDevtools);
   }
 
   UNSAFE_componentWillReceiveProps(newProps: Object) {
-    this.setState({inspectedView: newProps.inspectedView});
+    this.setState({inspectedViewTag: newProps.inspectedViewTag});
   }
 
-  _attachToDevtools = (agent: Object) => {
-    agent.addListener('hideNativeHighlight', this._onAgentHideNativeHighlight);
-    agent.addListener('showNativeHighlight', this._onAgentShowNativeHighlight);
-    agent.addListener('shutdown', this._onAgentShutdown);
+  attachToDevtools: (agent: any) => void = (agent: Object) => {
+    let _hideWait = null;
+    const hlSub = agent.sub('highlight', ({node, name, props}) => {
+      clearTimeout(_hideWait);
 
+      if (typeof node !== 'number') {
+        // Fiber
+        node = ReactNative.findNodeHandle(node);
+      }
+
+      UIManager.measure(node, (x, y, width, height, left, top) => {
+        this.setState({
+          hierarchy: [],
+          inspected: {
+            frame: {left, top, width, height},
+            style: props ? props.style : {},
+          },
+        });
+      });
+    });
+    const hideSub = agent.sub('hideHighlight', () => {
+      if (this.state.inspected === null) {
+        return;
+      }
+      // we wait to actually hide in order to avoid flicker
+      _hideWait = setTimeout(() => {
+        this.setState({
+          inspected: null,
+        });
+      }, 100);
+    });
+    this._subs = [hlSub, hideSub];
+
+    agent.on('shutdown', () => {
+      this.setState({devtoolsAgent: null});
+      this._subs = null;
+    });
     this.setState({
       devtoolsAgent: agent,
     });
-  };
-
-  _onAgentHideNativeHighlight = () => {
-    if (this.state.inspected === null) {
-      return;
-    }
-    // we wait to actually hide in order to avoid flicker
-    this._hideTimeoutID = setTimeout(() => {
-      this.setState({
-        inspected: null,
-      });
-    }, 100);
-  };
-
-  _onAgentShowNativeHighlight = node => {
-    clearTimeout(this._hideTimeoutID);
-
-    node.measure((x, y, width, height, left, top) => {
-      this.setState({
-        hierarchy: [],
-        inspected: {
-          frame: {left, top, width, height},
-        },
-      });
-    });
-  };
-
-  _onAgentShutdown = () => {
-    const agent = this.state.devtoolsAgent;
-    if (agent != null) {
-      agent.removeListener(
-        'hideNativeHighlight',
-        this._onAgentHideNativeHighlight,
-      );
-      agent.removeListener(
-        'showNativeHighlight',
-        this._onAgentShowNativeHighlight,
-      );
-      agent.removeListener('shutdown', this._onAgentShutdown);
-
-      this.setState({devtoolsAgent: null});
-    }
   };
 
   setSelection(i: number) {
@@ -208,7 +186,12 @@ class Inspector extends React.Component<
 
     if (this.state.devtoolsAgent) {
       // Skip host leafs
-      this.state.devtoolsAgent.selectNode(touchedViewTag);
+      const offsetFromLeaf = hierarchy.length - 1 - selection;
+      this.state.devtoolsAgent.selectFromDOMNode(
+        touchedViewTag,
+        true,
+        offsetFromLeaf,
+      );
     }
 
     this.setState({
@@ -242,8 +225,8 @@ class Inspector extends React.Component<
 
   setTouchTargeting(val: boolean) {
     Touchable.TOUCH_TARGET_DEBUG = val;
-    this.props.onRequestRerenderApp(inspectedView => {
-      this.setState({inspectedView});
+    this.props.onRequestRerenderApp(inspectedViewTag => {
+      this.setState({inspectedViewTag});
     });
   }
 
@@ -265,9 +248,8 @@ class Inspector extends React.Component<
       <View style={styles.container} pointerEvents="box-none">
         {this.state.inspecting && (
           <InspectorOverlay
-            isFabric={this.props.isFabric}
             inspected={this.state.inspected}
-            inspectedView={this.state.inspectedView}
+            inspectedViewTag={this.state.inspectedViewTag}
             onTouchViewTag={this.onTouchViewTag.bind(this)}
           />
         )}

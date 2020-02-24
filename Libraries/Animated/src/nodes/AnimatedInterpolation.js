@@ -7,9 +7,7 @@
  * @flow
  * @format
  */
-
 /* eslint no-bitwise: 0 */
-
 'use strict';
 
 const AnimatedNode = require('./AnimatedNode');
@@ -17,17 +15,17 @@ const AnimatedWithChildren = require('./AnimatedWithChildren');
 const NativeAnimatedHelper = require('../NativeAnimatedHelper');
 
 const invariant = require('invariant');
-const normalizeColor = require('../../../StyleSheet/normalizeColor');
+const normalizeColor = require('../../../Color/normalizeColor');
 
 type ExtrapolateType = 'extend' | 'identity' | 'clamp';
 
 export type InterpolationConfigType = {
-  inputRange: $ReadOnlyArray<number>,
+  inputRange: Array<number>,
   /* $FlowFixMe(>=0.38.0 site=react_native_fb,react_native_oss) - Flow error
    * detected during the deployment of v0.38.0. To see the error, remove this
    * comment and run flow
    */
-  outputRange: $ReadOnlyArray<number> | $ReadOnlyArray<string>,
+  outputRange: Array<number> | Array<string>,
   easing?: (input: number) => number,
   extrapolate?: ExtrapolateType,
   extrapolateLeft?: ExtrapolateType,
@@ -257,7 +255,7 @@ function isRgbOrRgba(range) {
   return typeof range === 'string' && range.startsWith('rgb');
 }
 
-function checkPattern(arr: $ReadOnlyArray<string>) {
+function checkPattern(arr: Array<string>) {
   const pattern = arr[0].replace(stringShapeRegex, '');
   for (let i = 1; i < arr.length; ++i) {
     invariant(
@@ -267,7 +265,7 @@ function checkPattern(arr: $ReadOnlyArray<string>) {
   }
 }
 
-function findRange(input: number, inputRange: $ReadOnlyArray<number>) {
+function findRange(input: number, inputRange: Array<number>) {
   let i;
   for (i = 1; i < inputRange.length - 1; ++i) {
     if (inputRange[i] >= input) {
@@ -277,7 +275,7 @@ function findRange(input: number, inputRange: $ReadOnlyArray<number>) {
   return i - 1;
 }
 
-function checkValidInputRange(arr: $ReadOnlyArray<number>) {
+function checkValidInputRange(arr: Array<number>) {
   invariant(arr.length >= 2, 'inputRange must have at least 2 elements');
   for (let i = 1; i < arr.length; ++i) {
     invariant(
@@ -293,7 +291,7 @@ function checkValidInputRange(arr: $ReadOnlyArray<number>) {
   }
 }
 
-function checkInfiniteRange(name: string, arr: $ReadOnlyArray<number>) {
+function checkInfiniteRange(name: string, arr: Array<number>) {
   invariant(arr.length >= 2, name + ' must have at least 2 elements');
   invariant(
     arr.length !== 2 || arr[0] !== -Infinity || arr[1] !== Infinity,

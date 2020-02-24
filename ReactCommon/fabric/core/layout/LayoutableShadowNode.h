@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (c) Facebook, Inc. and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -17,7 +17,6 @@
 #include <react/core/Sealable.h>
 #include <react/core/ShadowNode.h>
 #include <react/debug/DebugStringConvertible.h>
-#include <react/graphics/Geometry.h>
 #include <react/graphics/Transform.h>
 
 namespace facebook {
@@ -32,12 +31,6 @@ struct LayoutContext;
  */
 class LayoutableShadowNode : public virtual Sealable {
  public:
-  class LayoutInspectingPolicy final {
-   public:
-    bool includeTransform{true};
-    bool includeScrollViewContentOffset{true};
-  };
-
   using UnsharedList = better::
       small_vector<LayoutableShadowNode *, kShadowNodeChildrenSmallVectorSize>;
 
@@ -84,22 +77,13 @@ class LayoutableShadowNode : public virtual Sealable {
    * Returns layout metrics relatively to the given ancestor node.
    */
   LayoutMetrics getRelativeLayoutMetrics(
-      LayoutableShadowNode const &ancestorLayoutableShadowNode,
-      LayoutInspectingPolicy policy) const;
-
-  /*
-   * Returns the ShadowNode that is rendered at the Point received as a
-   * parameter.
-   */
-  static ShadowNode::Shared findNodeAtPoint(
-      ShadowNode::Shared node,
-      Point point);
+      const LayoutableShadowNode &ancestorLayoutableShadowNode) const;
 
  protected:
   /*
    * Clean or Dirty layout state:
    * Indicates whether all nodes (and possibly their subtrees) along the path
-   * to the root node should be re-laid out.
+   * to the root node should be re-layouted.
    */
   virtual void cleanLayout() = 0;
   virtual void dirtyLayout() = 0;
