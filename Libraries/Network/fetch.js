@@ -13,7 +13,7 @@
 
 // side-effectful require() to put fetch,
 // Headers, Request, Response in global scope
-//require('whatwg-fetch');
+
 const whatwg = require('../vendor/core/whatwg-fetch');
 if (whatwg && whatwg.fetch) {
     module.exports = whatwg;
